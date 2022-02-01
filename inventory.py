@@ -43,6 +43,7 @@ def get_s3_buckets(session):
     """
     Get a list of S3 buckets based on the session provided.
     """
+    print("processing s3 buckets for " + session.profile_name + "...")
     s3 = session.client('s3')
     return s3.list_buckets()
 
@@ -50,6 +51,7 @@ def get_asg(session, region):
     """
     Get a list of AutoScaling groups based on the session and region provided.
     """
+    print("processing asg for " + session.profile_name + "/" + region + "...")
     asgs = []
 
     asg = session.client('autoscaling', region_name=region)
@@ -65,6 +67,7 @@ def get_ec2_instances(session, region):
     """
     Get a list of EC2 instances based on the session and region provided.
     """
+    print("processing ec2 instances for " + session.profile_name + "/" + region + "...")
     instances = []
     
     ec2 = session.resource('ec2', region_name=region)
@@ -75,6 +78,20 @@ def get_ec2_instances(session, region):
         pass
 
     return instances
+
+def get_security_groups(session, region):
+    """
+    Get a list of security groups based on the session and region provided.
+    """
+    print("processing security groups for " + session.profile_name + "/" + region + "...")
+    security_groups = []
+    try:
+        ec2 = session.resource('ec2', region_name=region)
+        for security_group in ec2.security_groups.all():
+            security_groups.append(security_group)
+        return security_groups
+    except:
+        return []
 
 def get_profile_list():
     """
@@ -130,7 +147,13 @@ def ec2_instances_list(session):
         ec2_instances = get_ec2_instances(session, region)
         
         for instance in ec2_instances:
+            security_groups = ""
             instance_id = instance.id
+            vpc_id = instance.vpc_id
+            security_groups_raw = instance.security_groups
+            for group in security_groups_raw:
+                security_groups += group['GroupName'] + ", "
+            security_groups = security_groups[:-2]
             if instance.tags != None:
                 for tag in instance.tags:
                     if tag['Key'] != 'Name':
@@ -138,8 +161,47 @@ def ec2_instances_list(session):
                     else:
                         name = tag['Value']
             instance_state = instance.state['Name']
-            instances.append([instance_id, name, instance_state, session.profile_name, region])
+            instances.append([instance_id, name, instance_state, session.profile_name, region, security_groups, vpc_id])
     return instances
+
+def security_groups_list(session):
+    """
+    Return the security groups in list format.
+    """
+    regions = get_available_region_list(session)
+    security_groups = []
+    for region in regions:
+        security_groups_list = get_security_groups(session, region)
+        for security_group in security_groups_list:
+            group_name = security_group.group_name
+            group_id = security_group.id
+            vpc_id = security_group.vpc_id
+            group_description = security_group.description
+            for rule in security_group.ip_permissions:
+                if rule['IpProtocol'] == '-1':
+                    continue
+                else:
+                    port = rule['FromPort']
+                    for ip_range in rule['IpRanges']:
+                        cidr = ip_range['CidrIp']
+                        if 'Description' in ip_range.keys():
+                            rule_description = ip_range['Description']
+                        else:
+                            rule_description = "None"
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, cidr, rule_description])
+            for rule in security_group.ip_permissions_egress:
+                if rule['IpProtocol'] == '-1':
+                    continue
+                else:
+                    port = rule['FromPort']
+                    for ip_range in rule['IpRanges']:
+                        cidr = ip_range['CidrIp']
+                        if 'Description' in ip_range.keys():
+                            rule_description = ip_range['Description']
+                        else:
+                            rule_description = "None"
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, cidr, rule_description])
+    return security_groups
 
 def write_worksheet(workbook, worksheet_name, data):
     """
@@ -169,21 +231,24 @@ def main():
     # Open workbook
     workbook = xlsxwriter.Workbook(workbook_file)
     # Create a list of S3 buckets.
-    print("Getting S3 buckets...")
     s3_buckets = [s3_buckets_list(session) for session in sessions]
     s3_buckets_flat = [item for sublist in s3_buckets for item in sublist]
     s3_buckets_flat.insert(0,["Bucket Name", "Profile", "LocationConstraint"])
     # Write S3 buckets to spreadsheet.
     write_worksheet(workbook, "S3 Buckets", s3_buckets_flat)
     # Create a list of EC2 instances.
-    print("Getting EC2 instances...")
     ec2_instances = [ec2_instances_list(session) for session in sessions]
     ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
-    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance State", "Profile", "Region"])
+    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance State", "Profile", "Region", "Security Groups", "VPC ID"])
     # Write EC2 instances to spreadsheet.
     write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
+    # Create a list of Security Group rules.
+    security_groups = [security_groups_list(session) for session in sessions]
+    security_groups_flat = [item for sublist in security_groups for item in sublist]
+    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "CIDR", "Rule Description"])
+    # Write Security Group rules to spreadsheet.
+    write_worksheet(workbook, "Security Group Rules", security_groups_flat)    
     # Create a list of AutoScaling groups.
-    print("Getting AutoScaling groups...")
     asg = [asg_list(session) for session in sessions]
     asg_flat = [item for sublist in asg for item in sublist]
     asg_flat.insert(0,["AutoScaling Group", "Profile", "Region"])
