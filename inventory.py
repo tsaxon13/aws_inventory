@@ -148,6 +148,7 @@ def ec2_instances_list(session):
         
         for instance in ec2_instances:
             security_groups = ""
+            name = ""
             instance_id = instance.id
             vpc_id = instance.vpc_id
             security_groups_raw = instance.security_groups
@@ -178,6 +179,8 @@ def security_groups_list(session):
             vpc_id = security_group.vpc_id
             group_description = security_group.description
             for rule in security_group.ip_permissions:
+                port = ""
+                cidr = ""
                 if rule['IpProtocol'] == '-1':
                     continue
                 else:
@@ -190,6 +193,8 @@ def security_groups_list(session):
                             rule_description = "None"
                         security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, cidr, rule_description])
             for rule in security_group.ip_permissions_egress:
+                port = ""
+                cidr = ""
                 if rule['IpProtocol'] == '-1':
                     continue
                 else:
