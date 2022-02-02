@@ -232,7 +232,7 @@ def security_groups_list(session):
                             rule_description = ip_range['Description']
                         else:
                             rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description])
 
                 if rule['UserIdGroupPairs'] != []:
                     for user_group in rule['UserIdGroupPairs']:
@@ -245,10 +245,10 @@ def security_groups_list(session):
                             endpoint_description = session.client('ec2').describe_security_groups(GroupIds=[user_group['GroupId']])['SecurityGroups'][0]['Description']
                         except:
                             endpoint_description = "Unknown Description"
-                            
+
                         endpoint = user_group['GroupId'] + "/" + sg_name + "/" + endpoint_description
                         rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description])
 
     return security_groups
 
