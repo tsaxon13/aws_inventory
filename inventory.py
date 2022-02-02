@@ -153,7 +153,7 @@ def ec2_instances_list(session):
             vpc_id = instance.vpc_id
             security_groups_raw = instance.security_groups
             for group in security_groups_raw:
-                security_groups += group['GroupName'] + ", "
+                security_groups += group['GroupId'] + ", "
             security_groups = security_groups[:-2]
             if instance.tags != None:
                 for tag in instance.tags:
@@ -178,34 +178,78 @@ def security_groups_list(session):
             group_id = security_group.id
             vpc_id = security_group.vpc_id
             group_description = security_group.description
+            # process ingress rules
             for rule in security_group.ip_permissions:
                 port = ""
-                cidr = ""
-                if rule['IpProtocol'] == '-1':
-                    continue
-                else:
+                endpoint = ""
+                protocol = rule['IpProtocol']
+
+                if protocol != "-1":
                     port = rule['FromPort']
+                else:
+                    port = "All"
+
+                if rule['IpRanges'] != []:
                     for ip_range in rule['IpRanges']:
-                        cidr = ip_range['CidrIp']
+                        endpoint = ip_range['CidrIp']
                         if 'Description' in ip_range.keys():
                             rule_description = ip_range['Description']
                         else:
                             rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, cidr, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+
+                if rule['UserIdGroupPairs'] != []:
+                    for user_group in rule['UserIdGroupPairs']:
+                        try:
+                            sg_name = session.client('ec2').describe_security_groups(GroupIds=[user_group['GroupId']])['SecurityGroups'][0]['GroupName']
+                        except:
+                            sg_name = "Unknown Name"
+
+                        try:
+                            endpoint_description = session.client('ec2').describe_security_groups(GroupIds=[user_group['GroupId']])['SecurityGroups'][0]['Description']
+                        except:
+                            endpoint_description = "Unknown Description"
+
+                        endpoint = user_group['GroupId'] + "/" + sg_name + "/" + endpoint_description
+                        rule_description = "None"
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+
+            # process egress rules
             for rule in security_group.ip_permissions_egress:
                 port = ""
-                cidr = ""
-                if rule['IpProtocol'] == '-1':
-                    continue
-                else:
+                endpoint = ""
+                protocol = rule['IpProtocol']
+
+                if protocol != "-1":
                     port = rule['FromPort']
+                else:
+                    port = "All"
+
+                if rule['IpRanges'] != []:
                     for ip_range in rule['IpRanges']:
-                        cidr = ip_range['CidrIp']
+                        endpoint = ip_range['CidrIp']
                         if 'Description' in ip_range.keys():
                             rule_description = ip_range['Description']
                         else:
                             rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, cidr, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+
+                if rule['UserIdGroupPairs'] != []:
+                    for user_group in rule['UserIdGroupPairs']:
+                        try:
+                            sg_name = session.client('ec2').describe_security_groups(GroupIds=[user_group['GroupId']])['SecurityGroups'][0]['GroupName']
+                        except:
+                            sg_name = "Unknown Name"
+                        
+                        try:
+                            endpoint_description = session.client('ec2').describe_security_groups(GroupIds=[user_group['GroupId']])['SecurityGroups'][0]['Description']
+                        except:
+                            endpoint_description = "Unknown Description"
+                            
+                        endpoint = user_group['GroupId'] + "/" + sg_name + "/" + endpoint_description
+                        rule_description = "None"
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+
     return security_groups
 
 def write_worksheet(workbook, worksheet_name, data):
@@ -250,7 +294,7 @@ def main():
     # Create a list of Security Group rules.
     security_groups = [security_groups_list(session) for session in sessions]
     security_groups_flat = [item for sublist in security_groups for item in sublist]
-    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "CIDR", "Rule Description"])
+    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "Endpoint", "Rule Description"])
     # Write Security Group rules to spreadsheet.
     write_worksheet(workbook, "Security Group Rules", security_groups_flat)    
     # Create a list of AutoScaling groups.
