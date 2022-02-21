@@ -165,6 +165,24 @@ def ec2_instances_list(session):
             instances.append([instance_id, name, instance_state, session.profile_name, region, security_groups, vpc_id])
     return instances
 
+def vpc_list(session):
+    """
+    Return the VPCs in list format.
+    """
+    regions = get_available_region_list(session)
+    vpcs = []
+    for region in regions:
+        try:
+            ec2 = session.resource('ec2', region_name=region)
+            for vpc in ec2.vpcs.all():
+                vpc_id = vpc.id
+                vpc_cidr = vpc.cidr_block
+                vpc_is_default = vpc.is_default
+                vpcs.append([vpc_id, session.profile_name, region, vpc_cidr, vpc_is_default])
+        except:
+            print("Error getting VPCs for region: {}".format(region))
+    return vpcs
+
 def security_groups_list(session):
     """
     Return the security groups in list format.
@@ -301,6 +319,14 @@ def main():
     asg = [asg_list(session) for session in sessions]
     asg_flat = [item for sublist in asg for item in sublist]
     asg_flat.insert(0,["AutoScaling Group", "Profile", "Region"])
+    # Create a list of VPCs.
+    vpcs = [vpc_list(session) for session in sessions]
+    vpcs_flat = [item for sublist in vpcs for item in sublist]
+    vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default"])
+    # Create a list of Subnets. Comin' soon.
+
+    # Create a list of IAM users. Comin' soon.
+
     # Write AutoScaling groups to spreadsheet.
     write_worksheet(workbook, "AutoScaling Groups", asg_flat)
     workbook.close()
