@@ -183,6 +183,32 @@ def vpc_list(session):
             print("Error getting VPCs for region: {}".format(region))
     return vpcs
 
+def subnet_list(session):
+    """
+    Return the subnets in list format.
+    """
+    regions = get_available_region_list(session)
+    subnets = []
+    for region in regions:
+        try:
+            ec2 = session.resource('ec2', region_name=region)
+            for subnet in ec2.subnets.all():
+                subnet_id = subnet.id
+                subnet_name = ""
+                if subnet.tags != None:
+                    for tag in subnet.tags:
+                        if tag['Key'] != 'Name':
+                            continue
+                        else:
+                            subnet_name = tag['Value']
+                subnet_cidr = subnet.cidr_block
+                subnet_vpc_id = subnet.vpc_id
+                subnet_availability_zone = subnet.availability_zone
+                subnets.append([subnet_id, subnet_name, session.profile_name, region, subnet_vpc_id, subnet_cidr, subnet_availability_zone])
+        except Exception as e:
+            print("Error getting subnets for region: {}".format(region) + ": " + str(e))
+    return subnets
+
 def security_groups_list(session):
     """
     Return the security groups in list format.
@@ -323,8 +349,10 @@ def main():
     vpcs = [vpc_list(session) for session in sessions]
     vpcs_flat = [item for sublist in vpcs for item in sublist]
     vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default"])
-    # Create a list of Subnets. Comin' soon.
-
+    # Create a list of Subnets.
+    subnets = [subnet_list(session) for session in sessions]
+    subnets_flat = [item for sublist in subnets for item in sublist]
+    subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone"])
     # Create a list of IAM users. Comin' soon.
 
     # Write AutoScaling groups to spreadsheet.
