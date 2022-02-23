@@ -3,6 +3,7 @@ import xlsxwriter
 import csv
 import datetime
 import time
+import traceback
 
 """
 Get inventory of AWS resources and create a spreadsheet with the data
@@ -175,6 +176,7 @@ def vpc_list(session):
     regions = get_available_region_list(session)
     vpcs = []
     for region in regions:
+        print("processing vpcs for " + session.profile_name + "/" + region + "...")
         try:
             ec2 = session.resource('ec2', region_name=region)
             for vpc in ec2.vpcs.all():
@@ -193,6 +195,7 @@ def subnet_list(session):
     regions = get_available_region_list(session)
     subnets = []
     for region in regions:
+        print("processing subnets for " + session.profile_name + "/" + region + "...")
         try:
             ec2 = session.resource('ec2', region_name=region)
             for subnet in ec2.subnets.all():
@@ -245,6 +248,7 @@ def iam_users_list(session):
     report = get_credential_report(iam_client)
 
     try:
+        print("processing users for " + session.profile_name + "...")
         for user in iam.users.all():
             user_name = user.user_name
             user_arn = user.user_id
@@ -253,10 +257,11 @@ def iam_users_list(session):
             for k in user.access_keys.all():
                 if k.status == 'Active':
                     key_used = iam_client.get_access_key_last_used(AccessKeyId=k.id)
-                    key_date = key_used['AccessKeyLastUsed']['LastUsedDate']
-                    if key_date > latest:
-                        latest = key_date
-                    key_age = (datetime.datetime.now() - k.create_date).days
+                    if key_used['AccessKeyLastUsed']['ServiceName'] != 'N/A':
+                        key_date = key_used['AccessKeyLastUsed']['LastUsedDate']
+                        if key_date > latest:
+                            latest = key_date
+                    key_age = (datetime.datetime.now() - k.create_date.replace(tzinfo=None)).days
                     if active_key_age is not None:
                         if key_age > active_key_age:
                             active_key_age = key_age
@@ -269,15 +274,23 @@ def iam_users_list(session):
                 active_key_age = str(active_key_age) + " days"
 
             # search credential report for user, pull out password last changed date and convert string to datetime without timezone
-            password_last_changed = datetime.datetime.strptime([user for user in report if user['user'] == user_name][0]['password_last_changed'], "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
-            # convert to days
-            password_age = (datetime.datetime.now() - password_last_changed).days
-            last_activity = latest
-            create_date = user.create_date
-            mfa_enabled = user.mfa_devices
-
+            if [user for user in report if user['user'] == user_name][0]['password_last_changed'] != "N/A":
+                password_last_changed_raw = datetime.datetime.strptime([user for user in report if user['user'] == user_name][0]['password_last_changed'], "%Y-%m-%dT%H:%M:%S%z")
+                password_last_changed = password_last_changed_raw.replace(tzinfo=None)
+                # convert to days
+                password_age = (datetime.datetime.now() - password_last_changed).days
+            else:
+                password_age = "N/A"
+            last_activity = str(latest.replace(tzinfo=None))
+            create_date = str(user.create_date.replace(tzinfo=None))
+            if iam_client.list_mfa_devices(UserName=user_name)['MFADevices'] != []:
+                mfa_enabled = True
+            else:
+                mfa_enabled = False
             users.append([user_name, user_arn, session.profile_name, password_age, last_activity, create_date, mfa_enabled, active_key_age])
-    except:
+    except Exception as e:
+        print("Error getting IAM users for profile: {}".format(session.profile_name) + ": " + str(e))
+        traceback.print_exc()
         pass
     return users
 
