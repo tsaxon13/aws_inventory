@@ -1,5 +1,8 @@
 import boto3
 import xlsxwriter
+import csv
+import datetime
+import time
 
 """
 Get inventory of AWS resources and create a spreadsheet with the data
@@ -209,6 +212,76 @@ def subnet_list(session):
             print("Error getting subnets for region: {}".format(region) + ": " + str(e))
     return subnets
 
+# Request the credential report, download and parse the CSV.
+def get_credential_report(iam_client):
+    """
+    Get the credential report for all users.
+    """
+    resp1 = iam_client.generate_credential_report()
+    if resp1['State'] == 'COMPLETE' :
+        try: 
+            response = iam_client.get_credential_report()
+            credential_report_csv = response['Content'].decode('utf-8')
+            print(str(credential_report_csv).splitlines())
+            reader = csv.DictReader(credential_report_csv.splitlines())
+            # print(reader.fieldnames)
+            credential_report = []
+            for row in reader:
+                credential_report.append(row)
+            return(credential_report)
+        except Exception as e:
+            print("Unknown error getting Report: " + str(e))
+    else:
+        time.sleep(2)
+        return get_credential_report(iam_client)
+
+def iam_users_list(session):
+    """
+    Return the IAM users in list format.
+    """
+    users = []
+    iam = session.resource('iam')
+    iam_client = session.client('iam')
+    # generate credential report
+    report = get_credential_report(iam_client)
+
+    try:
+        for user in iam.users.all():
+            user_name = user.user_name
+            user_arn = user.user_id
+            latest = user.password_last_used or user.create_date
+            active_key_age = None
+            for k in user.access_keys.all():
+                if k.status == 'Active':
+                    key_used = iam_client.get_access_key_last_used(AccessKeyId=k.id)
+                    key_date = key_used['AccessKeyLastUsed']['LastUsedDate']
+                    if key_date > latest:
+                        latest = key_date
+                    key_age = (datetime.datetime.now() - k.create_date).days
+                    if active_key_age is not None:
+                        if key_age > active_key_age:
+                            active_key_age = key_age
+                    else:
+                        active_key_age = key_age
+
+            if active_key_age is None:
+                active_key_age = "N/A"
+            else:
+                active_key_age = str(active_key_age) + " days"
+
+            # search credential report for user, pull out password last changed date and convert string to datetime without timezone
+            password_last_changed = datetime.datetime.strptime([user for user in report if user['user'] == user_name][0]['password_last_changed'], "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
+            # convert to days
+            password_age = (datetime.datetime.now() - password_last_changed).days
+            last_activity = latest
+            create_date = user.create_date
+            mfa_enabled = user.mfa_devices
+
+            users.append([user_name, user_arn, session.profile_name, password_age, last_activity, create_date, mfa_enabled, active_key_age])
+    except:
+        pass
+    return users
+
 def security_groups_list(session):
     """
     Return the security groups in list format.
@@ -353,8 +426,10 @@ def main():
     subnets = [subnet_list(session) for session in sessions]
     subnets_flat = [item for sublist in subnets for item in sublist]
     subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone"])
-    # Create a list of IAM users. Comin' soon.
-
+    # Create a list of IAM users.
+    iam_users = [iam_users_list(session) for session in sessions]
+    iam_users_flat = [item for sublist in iam_users for item in sublist]
+    iam_users_flat.insert(0,["User Name", "User ARN", "Profile", "Password Age", "Last Activity", "Create Date", "MFA Enabled", "Active Key Age"])
     # Write AutoScaling groups to spreadsheet.
     write_worksheet(workbook, "AutoScaling Groups", asg_flat)
     workbook.close()
