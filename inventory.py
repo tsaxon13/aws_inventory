@@ -222,7 +222,6 @@ def get_credential_report(iam_client):
         try: 
             response = iam_client.get_credential_report()
             credential_report_csv = response['Content'].decode('utf-8')
-            print(str(credential_report_csv).splitlines())
             reader = csv.DictReader(credential_report_csv.splitlines())
             # print(reader.fieldnames)
             credential_report = []
@@ -418,20 +417,27 @@ def main():
     asg = [asg_list(session) for session in sessions]
     asg_flat = [item for sublist in asg for item in sublist]
     asg_flat.insert(0,["AutoScaling Group", "Profile", "Region"])
+    # Write AutoScaling groups to spreadsheet.
+    write_worksheet(workbook, "AutoScaling Groups", asg_flat)
     # Create a list of VPCs.
     vpcs = [vpc_list(session) for session in sessions]
     vpcs_flat = [item for sublist in vpcs for item in sublist]
     vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default"])
+    # Write VPCs to spreadsheet.
+    write_worksheet(workbook, "VPCs", vpcs_flat)
     # Create a list of Subnets.
     subnets = [subnet_list(session) for session in sessions]
     subnets_flat = [item for sublist in subnets for item in sublist]
     subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone"])
+    # Write Subnets to spreadsheet.
+    write_worksheet(workbook, "Subnets", subnets_flat)
     # Create a list of IAM users.
     iam_users = [iam_users_list(session) for session in sessions]
     iam_users_flat = [item for sublist in iam_users for item in sublist]
     iam_users_flat.insert(0,["User Name", "User ARN", "Profile", "Password Age", "Last Activity", "Create Date", "MFA Enabled", "Active Key Age"])
-    # Write AutoScaling groups to spreadsheet.
-    write_worksheet(workbook, "AutoScaling Groups", asg_flat)
+    # Write IAM users to spreadsheet.
+    write_worksheet(workbook, "IAM Users", iam_users_flat)
+    
     workbook.close()
 
 if __name__ == "__main__":
