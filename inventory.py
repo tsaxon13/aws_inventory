@@ -381,6 +381,32 @@ def security_groups_list(session):
 
     return security_groups
 
+def rds_instances_list(session):
+    """
+    Return RDS instance in list format
+    """
+
+    regions = get_available_region_list(session)
+    rds_instances = []
+    for region in regions:
+        try:
+            rds_client = session.client('rds', region_name=region)
+            rds_instances_list = rds_client.describe_db_instances()['DBInstances']
+            for rds_instance in rds_instances_list:
+                #rds_instances_flat.insert(0,["DB Identifier", "Availability Zone", "Profile", "Engine", "Size"])
+                rds_instance_name = rds_instance['DBInstanceIdentifier']
+                rds_instance_az = rds_instance['AvailabilityZone']
+                rds_instance_create_date = rds_instance['InstanceCreateTime']
+                rds_instance_engine = rds_instance['Engine']
+                rds_instance_type = rds_instance['DBInstanceClass']
+                #rds_instance_size = rds_instance.
+                rds_instances.append([rds_instance_name, rds_instance_az, session.profile_name, rds_instance_engine, rds_instance_type, str(rds_instance_create_date.replace(tzinfo=None))])
+        except Exception as e:
+            print("Error getting RDS instances for profile: {}".format(session.profile_name) + ": " + str(e))
+            traceback.print_exc()
+            pass
+    return rds_instances
+
 def write_worksheet(workbook, worksheet_name, data):
     """
     Write data to the worksheet.
@@ -450,6 +476,12 @@ def main():
     iam_users_flat.insert(0,["User Name", "User ARN", "Profile", "Password Age", "Last Activity", "Create Date", "MFA Enabled", "Active Key Age"])
     # Write IAM users to spreadsheet.
     write_worksheet(workbook, "IAM Users", iam_users_flat)
+    # Create a list of RDS instances.
+    rds_instances = [rds_instances_list(session) for session in sessions]
+    rds_instances_flat = [item for sublist in rds_instances for item in sublist]
+    rds_instances_flat.insert(0,["DB Identifier", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
+    # Write RDS instances to spreadsheet.
+    write_worksheet(workbook, "RDS Instances", rds_instances_flat)
     
     workbook.close()
 
