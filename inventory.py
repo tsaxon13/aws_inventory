@@ -390,6 +390,7 @@ def rds_instances_list(session):
     rds_instances = []
     for region in regions:
         try:
+            print("processing RDS instances for " + session.profile_name + "/" + region)
             rds_client = session.client('rds', region_name=region)
             rds_instances_list = rds_client.describe_db_instances()['DBInstances']
             for rds_instance in rds_instances_list:
