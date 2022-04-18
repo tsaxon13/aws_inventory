@@ -371,7 +371,7 @@ def security_groups_list(session):
                             rule_description = ip_range['Description']
                         else:
                             rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description, num_int])
 
                 if rule['UserIdGroupPairs'] != []:
                     for user_group in rule['UserIdGroupPairs']:
@@ -387,7 +387,7 @@ def security_groups_list(session):
 
                         endpoint = user_group['GroupId'] + "/" + sg_name + "/" + endpoint_description
                         rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "outbound", port, endpoint, rule_description, num_int])
 
     return security_groups
 
@@ -427,6 +427,8 @@ def write_worksheet(workbook, worksheet_name, data):
     for row_num, row_data in enumerate(data):
         for col_num, cell_data in enumerate(row_data):
             worksheet.write(row_num, col_num, cell_data)
+    
+    worksheet.autofilter(0, 0, len(data), len(data[0]))
     
 def init():
     """
