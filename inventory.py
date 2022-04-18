@@ -184,7 +184,11 @@ def vpc_list(session):
                 vpc_id = vpc.id
                 vpc_cidr = vpc.cidr_block
                 vpc_is_default = vpc.is_default
-                vpcs.append([vpc_id, session.profile_name, region, vpc_cidr, vpc_is_default])
+
+                # get number of interfaces using this vpc
+                netInt = ec2.network_interfaces.filter(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+                num_int = len(list(netInt))
+                vpcs.append([vpc_id, session.profile_name, region, vpc_cidr, vpc_is_default, num_int])
         except:
             print("Error getting VPCs for region: {}".format(region))
     return vpcs
@@ -463,7 +467,7 @@ def main():
     # Create a list of VPCs.
     vpcs = [vpc_list(session) for session in sessions]
     vpcs_flat = [item for sublist in vpcs for item in sublist]
-    vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default"])
+    vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default", "Number of Interfaces"])
     # Write VPCs to spreadsheet.
     write_worksheet(workbook, "VPCs", vpcs_flat)
     # Create a list of Subnets.
