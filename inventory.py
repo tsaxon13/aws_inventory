@@ -212,10 +212,12 @@ def subnet_list(session):
                             continue
                         else:
                             subnet_name = tag['Value']
+                netInt = ec2.network_interfaces.filter(Filters=[{'Name': 'subnet-id', 'Values': [subnet_id]}])
+                num_int = len(list(netInt))
                 subnet_cidr = subnet.cidr_block
                 subnet_vpc_id = subnet.vpc_id
                 subnet_availability_zone = subnet.availability_zone
-                subnets.append([subnet_id, subnet_name, session.profile_name, region, subnet_vpc_id, subnet_cidr, subnet_availability_zone])
+                subnets.append([subnet_id, subnet_name, session.profile_name, region, subnet_vpc_id, subnet_cidr, subnet_availability_zone, num_int])
         except Exception as e:
             print("Error getting subnets for region: {}".format(region) + ": " + str(e))
     return subnets
@@ -473,7 +475,7 @@ def main():
     # Create a list of Subnets.
     subnets = [subnet_list(session) for session in sessions]
     subnets_flat = [item for sublist in subnets for item in sublist]
-    subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone"])
+    subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone", "Number of Interfaces"])
     # Write Subnets to spreadsheet.
     write_worksheet(workbook, "Subnets", subnets_flat)
     # Create a list of IAM users.
