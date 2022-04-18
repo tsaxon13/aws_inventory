@@ -154,6 +154,7 @@ def ec2_instances_list(session):
             security_groups = ""
             name = ""
             instance_id = instance.id
+            instance_type = instance.instance_type
             vpc_id = instance.vpc_id
             security_groups_raw = instance.security_groups
             for group in security_groups_raw:
@@ -166,7 +167,7 @@ def ec2_instances_list(session):
                     else:
                         name = tag['Value']
             instance_state = instance.state['Name']
-            instances.append([instance_id, name, instance_state, session.profile_name, region, security_groups, vpc_id])
+            instances.append([instance_id, name, instance_type, instance_state, session.profile_name, region, security_groups, vpc_id])
     return instances
 
 def vpc_list(session):
@@ -444,7 +445,7 @@ def main():
     # Create a list of EC2 instances.
     ec2_instances = [ec2_instances_list(session) for session in sessions]
     ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
-    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance State", "Profile", "Region", "Security Groups", "VPC ID"])
+    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Profile", "Region", "Security Groups", "VPC ID"])
     # Write EC2 instances to spreadsheet.
     write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
     # Create a list of Security Group rules.
