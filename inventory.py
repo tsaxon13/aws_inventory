@@ -309,9 +309,12 @@ def security_groups_list(session):
     security_groups = []
     for region in regions:
         security_groups_list = get_security_groups(session, region)
+        ec2 = session.resource('ec2', region_name=region)
         for security_group in security_groups_list:
             group_name = security_group.group_name
             group_id = security_group.id
+            netInt = ec2.network_interfaces.filter(Filters=[{'Name': 'group-id', 'Values': [group_id]}])
+            num_int = len(list(netInt))
             vpc_id = security_group.vpc_id
             group_description = security_group.description
             # process ingress rules
@@ -348,7 +351,7 @@ def security_groups_list(session):
 
                         endpoint = user_group['GroupId'] + "/" + sg_name + "/" + endpoint_description
                         rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description, num_int])
 
             # process egress rules
             for rule in security_group.ip_permissions_egress:
@@ -457,7 +460,7 @@ def main():
     # Create a list of Security Group rules.
     security_groups = [security_groups_list(session) for session in sessions]
     security_groups_flat = [item for sublist in security_groups for item in sublist]
-    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "Endpoint", "Rule Description"])
+    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "Endpoint", "Rule Description", "Number of Interfaces"])
     # Write Security Group rules to spreadsheet.
     write_worksheet(workbook, "Security Group Rules", security_groups_flat)    
     # Create a list of AutoScaling groups.
