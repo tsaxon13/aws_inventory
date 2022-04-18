@@ -335,7 +335,7 @@ def security_groups_list(session):
                             rule_description = ip_range['Description']
                         else:
                             rule_description = "None"
-                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description])
+                        security_groups.append([group_name, group_id, vpc_id, group_description, session.profile_name, region, "inbound", port, endpoint, rule_description, num_int])
 
                 if rule['UserIdGroupPairs'] != []:
                     for user_group in rule['UserIdGroupPairs']:
