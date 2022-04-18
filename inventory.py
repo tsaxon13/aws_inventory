@@ -428,7 +428,13 @@ def write_worksheet(workbook, worksheet_name, data):
         for col_num, cell_data in enumerate(row_data):
             worksheet.write(row_num, col_num, cell_data)
     
-    worksheet.autofilter(0, 0, len(data), len(data[0]))
+    worksheet.autofilter(0, 0, len(data), len(data[0]) - 1)
+    max_col_sizes = [ max([len(str(data[row][col])) for row in range(len(data))]) for col in range(len(data[0])) ]
+
+    col = 0
+    for max_col_size in max_col_sizes:
+        worksheet.set_column(col, col, max_col_size * 1.2)
+        col += 1
     
 def init():
     """
