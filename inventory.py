@@ -418,6 +418,38 @@ def rds_instances_list(session):
             pass
     return rds_instances
 
+def efs_filesystems_list(session):
+    """
+    Return EFS filesystems in list format
+    """
+
+    regions = get_available_region_list(session)
+    efs_filesystems = []
+    for region in regions:
+        try:
+            print("processing EFS filesystems for " + session.profile_name + "/" + region)
+            efs_client = session.client('efs', region_name=region)
+            efs_filesystems_list = efs_client.describe_file_systems()['FileSystems']
+            for efs_filesystem in efs_filesystems_list:
+                try:
+                    efs_filesystem_name = efs_filesystem['Name']
+                except:
+                    efs_filesystem_name = "No Name"
+                efs_filesystem_id = efs_filesystem['FileSystemId']
+                efs_filesystem_create_date = str(efs_filesystem['CreationTime'].replace(tzinfo=None))
+                efs_filesystem_size = efs_filesystem['SizeInBytes']['Value']
+                efs_filesystem_encrypted = str(efs_filesystem['Encrypted'])
+                efs_filesystem_backup_enabled = "False"
+                for tag in efs_filesystem['Tags']:
+                    if tag['Key'] == 'aws:elasticfilesystem:default-backup' and tag['Value'] == 'enabled':
+                        efs_filesystem_backup_enabled = "True"
+                efs_filesystems.append([efs_filesystem_name, efs_filesystem_id, session.profile_name, region, efs_filesystem_create_date, efs_filesystem_size, efs_filesystem_encrypted, efs_filesystem_backup_enabled])
+        except Exception as e:
+            print("Error getting EFS filesystems for profile: {}".format(session.profile_name) + ": " + str(e))
+            traceback.print_exc()
+            pass
+    return efs_filesystems
+
 def write_worksheet(workbook, worksheet_name, data):
     """
     Write data to the worksheet.
@@ -501,6 +533,12 @@ def main():
     rds_instances_flat.insert(0,["DB Identifier", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
     # Write RDS instances to spreadsheet.
     write_worksheet(workbook, "RDS Instances", rds_instances_flat)
+    # Create a list of EFS filesystems.
+    efs_filesystems = [efs_filesystems_list(session) for session in sessions]
+    efs_filesystems_flat = [item for sublist in efs_filesystems for item in sublist]
+    efs_filesystems_flat.insert(0,["File System Name", "File System ID", "Profile", "Region", "Create Date", "Size", "Encrypted", "Backup Enabled"])
+    # Write EFS filesystems to spreadsheet.
+    write_worksheet(workbook, "EFS Filesystems", efs_filesystems_flat)
     
     workbook.close()
 
