@@ -61,7 +61,7 @@ def get_asg(session, region):
     asg = session.client('autoscaling', region_name=region)
     try:
         for asg in asg.describe_auto_scaling_groups()['AutoScalingGroups']:
-            asgs.append(asg['AutoScalingGroupName'])
+            asgs.append((asg['AutoScalingGroupName'], asg['DesiredCapacity']))
     except:
         pass
 
@@ -138,7 +138,7 @@ def asg_list(session):
     for region in regions:
         asg_list = get_asg(session, region)
         for asg in asg_list:
-            asgs.append([asg, session.profile_name, region])
+            asgs.append([asg[0], session.profile_name, region, asg[1]])
     return asgs
 
 def ec2_instances_list(session):
@@ -506,7 +506,7 @@ def main():
     # Create a list of AutoScaling groups.
     asg = [asg_list(session) for session in sessions]
     asg_flat = [item for sublist in asg for item in sublist]
-    asg_flat.insert(0,["AutoScaling Group", "Profile", "Region"])
+    asg_flat.insert(0,["AutoScaling Group", "Profile", "Region", "Desired Capacity"])
     # Write AutoScaling groups to spreadsheet.
     write_worksheet(workbook, "AutoScaling Groups", asg_flat)
     # Create a list of VPCs.
