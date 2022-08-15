@@ -67,6 +67,21 @@ def get_asg(session, region):
 
     return asgs
 
+def get_lambdas(session, region):
+    """
+    Get a list of lambda functions based on session and region provided.
+    """
+    print("processing lambdas for " + session.profile_name + "/" + region + "...")
+    lambdas = []
+
+    client = session.client('lambda', region_name=region)
+    try:
+        lambdas = client.list_functions()["Functions"]
+    except:
+        pass
+
+    return lambdas
+
 def get_ec2_instances(session, region):
     """
     Get a list of EC2 instances based on the session and region provided.
@@ -140,6 +155,51 @@ def asg_list(session):
         for asg in asg_list:
             asgs.append([asg[0], session.profile_name, region, asg[1]])
     return asgs
+
+def lambda_list(session):
+    """
+    Return a list of Lambda functions
+    """
+    now = datetime.datetime.utcnow()
+    now = datetime.datetime(now.year, now.month, now.day)
+    to_check_days = 365
+    start = now - datetime.timedelta(days=to_check_days)
+
+    regions = get_available_region_list(session)
+    lambdas = []
+    for region in regions:
+        lambda_list = get_lambdas(session,region)
+        cw = session.client('cloudwatch', region_name=region)
+        for lambdaFunction in lambda_list:
+            # check for last run time
+            query = [{
+                'Id': 'i0',
+                'MetricStat': {
+                    'Metric': {
+                        'Namespace': 'AWS/Lambda',
+                        'MetricName': "Invocations",
+                        'Dimensions': [
+                            {'Name': 'FunctionName', 'Value': lambdaFunction['FunctionName']},
+                        ],
+                    },
+                    'Period': 86400,
+                    'Stat': 'Sum',
+                }
+            }]
+
+            paginator = cw.get_paginator('get_metric_data')
+            for page in paginator.paginate(MetricDataQueries=query, StartTime=start, EndTime=start + datetime.timedelta(days=to_check_days+1)):
+                for metric in page["MetricDataResults"]:
+                    if len(metric['Timestamps']) > 0:
+                        last = max(x for x in metric['Timestamps'])
+                        last = last.replace(tzinfo=None)
+                        invoked = sum(x for x in metric['Values'])
+                    else:
+                        last = "never"
+                        invoked = "none"
+
+            lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, lambdaFunction['Runtime'], str(last), str(invoked) ])
+    return lambdas
 
 def ec2_instances_list(session):
     """
@@ -539,6 +599,12 @@ def main():
     efs_filesystems_flat.insert(0,["File System Name", "File System ID", "Profile", "Region", "Create Date", "Size", "Encrypted", "Backup Enabled"])
     # Write EFS filesystems to spreadsheet.
     write_worksheet(workbook, "EFS Filesystems", efs_filesystems_flat)
+    # Create a list of Lambda functions and details about them.
+    lambdas = [lambda_list(session) for session in sessions]
+    lambdas_flat = [item for sublist in lambdas for item in sublist]
+    lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
+    # Write lambdas to spreadsheet.
+    write_worksheet(workbook, "Lambda Functions", lambdas_flat)
     
     workbook.close()
 
