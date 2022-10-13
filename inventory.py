@@ -4,6 +4,7 @@ import csv
 import datetime
 import time
 import traceback
+import re
 
 """
 Get inventory of AWS resources and create a spreadsheet with the data
@@ -227,7 +228,12 @@ def ec2_instances_list(session):
                     else:
                         name = tag['Value']
             instance_state = instance.state['Name']
-            instances.append([instance_id, name, instance_type, instance_state, session.profile_name, region, security_groups, vpc_id])
+            if instance_state == "stopped":
+                reason = instance.state_transition_reason
+                stopped_time = re.findall('.*\((.*)\)', reason)[0]
+            else:
+                stopped_time = "n/a"
+            instances.append([instance_id, name, instance_type, instance_state, stopped_time, session.profile_name, region, security_groups, vpc_id])
     return instances
 
 def vpc_list(session):
@@ -559,7 +565,7 @@ def main():
     # Create a list of EC2 instances.
     ec2_instances = [ec2_instances_list(session) for session in sessions]
     ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
-    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Profile", "Region", "Security Groups", "VPC ID"])
+    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Instance Stopped Time", "Profile", "Region", "Security Groups", "VPC ID"])
     # Write EC2 instances to spreadsheet.
     write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
     # Create a list of Security Group rules.
