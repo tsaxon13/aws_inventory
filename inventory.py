@@ -4,6 +4,7 @@ import csv
 import datetime
 import time
 import traceback
+import re
 
 """
 Get inventory of AWS resources and create a spreadsheet with the data
@@ -61,11 +62,26 @@ def get_asg(session, region):
     asg = session.client('autoscaling', region_name=region)
     try:
         for asg in asg.describe_auto_scaling_groups()['AutoScalingGroups']:
-            asgs.append(asg['AutoScalingGroupName'])
+            asgs.append((asg['AutoScalingGroupName'], asg['DesiredCapacity']))
     except:
         pass
 
     return asgs
+
+def get_lambdas(session, region):
+    """
+    Get a list of lambda functions based on session and region provided.
+    """
+    print("processing lambdas for " + session.profile_name + "/" + region + "...")
+    lambdas = []
+
+    client = session.client('lambda', region_name=region)
+    try:
+        lambdas = client.list_functions()["Functions"]
+    except:
+        pass
+
+    return lambdas
 
 def get_ec2_instances(session, region):
     """
@@ -138,8 +154,53 @@ def asg_list(session):
     for region in regions:
         asg_list = get_asg(session, region)
         for asg in asg_list:
-            asgs.append([asg, session.profile_name, region])
+            asgs.append([asg[0], session.profile_name, region, asg[1]])
     return asgs
+
+def lambda_list(session):
+    """
+    Return a list of Lambda functions
+    """
+    now = datetime.datetime.utcnow()
+    now = datetime.datetime(now.year, now.month, now.day)
+    to_check_days = 365
+    start = now - datetime.timedelta(days=to_check_days)
+
+    regions = get_available_region_list(session)
+    lambdas = []
+    for region in regions:
+        lambda_list = get_lambdas(session,region)
+        cw = session.client('cloudwatch', region_name=region)
+        for lambdaFunction in lambda_list:
+            # check for last run time
+            query = [{
+                'Id': 'i0',
+                'MetricStat': {
+                    'Metric': {
+                        'Namespace': 'AWS/Lambda',
+                        'MetricName': "Invocations",
+                        'Dimensions': [
+                            {'Name': 'FunctionName', 'Value': lambdaFunction['FunctionName']},
+                        ],
+                    },
+                    'Period': 86400,
+                    'Stat': 'Sum',
+                }
+            }]
+
+            paginator = cw.get_paginator('get_metric_data')
+            for page in paginator.paginate(MetricDataQueries=query, StartTime=start, EndTime=start + datetime.timedelta(days=to_check_days+1)):
+                for metric in page["MetricDataResults"]:
+                    if len(metric['Timestamps']) > 0:
+                        last = max(x for x in metric['Timestamps'])
+                        last = last.replace(tzinfo=None)
+                        invoked = sum(x for x in metric['Values'])
+                    else:
+                        last = "never"
+                        invoked = "none"
+
+            lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, lambdaFunction['Runtime'], str(last), str(invoked) ])
+    return lambdas
 
 def ec2_instances_list(session):
     """
@@ -167,7 +228,12 @@ def ec2_instances_list(session):
                     else:
                         name = tag['Value']
             instance_state = instance.state['Name']
-            instances.append([instance_id, name, instance_type, instance_state, session.profile_name, region, security_groups, vpc_id])
+            if instance_state == "stopped":
+                reason = instance.state_transition_reason
+                stopped_time = re.findall('.*\((.*)\)', reason)[0]
+            else:
+                stopped_time = "n/a"
+            instances.append([instance_id, name, instance_type, instance_state, stopped_time, session.profile_name, region, security_groups, vpc_id])
     return instances
 
 def vpc_list(session):
@@ -182,13 +248,17 @@ def vpc_list(session):
             ec2 = session.resource('ec2', region_name=region)
             for vpc in ec2.vpcs.all():
                 vpc_id = vpc.id
+                try:
+                    vpc_name = [tag for tag in vpc.tags if tag['Key'] == 'Name'][0]['Value']
+                except:
+                    vpc_name = ""
                 vpc_cidr = vpc.cidr_block
                 vpc_is_default = vpc.is_default
 
                 # get number of interfaces using this vpc
                 netInt = ec2.network_interfaces.filter(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
                 num_int = len(list(netInt))
-                vpcs.append([vpc_id, session.profile_name, region, vpc_cidr, vpc_is_default, num_int])
+                vpcs.append([vpc_id, vpc_name, session.profile_name, region, vpc_cidr, vpc_is_default, num_int])
         except:
             print("Error getting VPCs for region: {}".format(region))
     return vpcs
@@ -410,8 +480,9 @@ def rds_instances_list(session):
                 rds_instance_create_date = rds_instance['InstanceCreateTime']
                 rds_instance_engine = rds_instance['Engine']
                 rds_instance_type = rds_instance['DBInstanceClass']
+                rds_endpoint_address = rds_instance['Endpoint']['Address']
                 #rds_instance_size = rds_instance.
-                rds_instances.append([rds_instance_name, rds_instance_az, session.profile_name, rds_instance_engine, rds_instance_type, str(rds_instance_create_date.replace(tzinfo=None))])
+                rds_instances.append([rds_instance_name, rds_endpoint_address, rds_instance_az, session.profile_name, rds_instance_engine, rds_instance_type, str(rds_instance_create_date.replace(tzinfo=None))])
         except Exception as e:
             print("Error getting RDS instances for profile: {}".format(session.profile_name) + ": " + str(e))
             traceback.print_exc()
@@ -494,7 +565,7 @@ def main():
     # Create a list of EC2 instances.
     ec2_instances = [ec2_instances_list(session) for session in sessions]
     ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
-    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Profile", "Region", "Security Groups", "VPC ID"])
+    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Instance Stopped Time", "Profile", "Region", "Security Groups", "VPC ID"])
     # Write EC2 instances to spreadsheet.
     write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
     # Create a list of Security Group rules.
@@ -506,13 +577,13 @@ def main():
     # Create a list of AutoScaling groups.
     asg = [asg_list(session) for session in sessions]
     asg_flat = [item for sublist in asg for item in sublist]
-    asg_flat.insert(0,["AutoScaling Group", "Profile", "Region"])
+    asg_flat.insert(0,["AutoScaling Group", "Profile", "Region", "Desired Capacity"])
     # Write AutoScaling groups to spreadsheet.
     write_worksheet(workbook, "AutoScaling Groups", asg_flat)
     # Create a list of VPCs.
     vpcs = [vpc_list(session) for session in sessions]
     vpcs_flat = [item for sublist in vpcs for item in sublist]
-    vpcs_flat.insert(0,["VPC ID", "Profile", "Region", "CIDR Block", "Is Default", "Number of Interfaces"])
+    vpcs_flat.insert(0,["VPC ID", "VPC Name", "Profile", "Region", "CIDR Block", "Is Default", "Number of Interfaces"])
     # Write VPCs to spreadsheet.
     write_worksheet(workbook, "VPCs", vpcs_flat)
     # Create a list of Subnets.
@@ -530,7 +601,7 @@ def main():
     # Create a list of RDS instances.
     rds_instances = [rds_instances_list(session) for session in sessions]
     rds_instances_flat = [item for sublist in rds_instances for item in sublist]
-    rds_instances_flat.insert(0,["DB Identifier", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
+    rds_instances_flat.insert(0,["DB Identifier", "DB Endpoint", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
     # Write RDS instances to spreadsheet.
     write_worksheet(workbook, "RDS Instances", rds_instances_flat)
     # Create a list of EFS filesystems.
@@ -539,6 +610,12 @@ def main():
     efs_filesystems_flat.insert(0,["File System Name", "File System ID", "Profile", "Region", "Create Date", "Size", "Encrypted", "Backup Enabled"])
     # Write EFS filesystems to spreadsheet.
     write_worksheet(workbook, "EFS Filesystems", efs_filesystems_flat)
+    # Create a list of Lambda functions and details about them.
+    lambdas = [lambda_list(session) for session in sessions]
+    lambdas_flat = [item for sublist in lambdas for item in sublist]
+    lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
+    # Write lambdas to spreadsheet.
+    write_worksheet(workbook, "Lambda Functions", lambdas_flat)
     
     workbook.close()
 
