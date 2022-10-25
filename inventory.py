@@ -130,6 +130,20 @@ def set_profile_list():
     answers = inquirer.prompt(questions)
     return answers
 
+def set_resource_list():
+    """
+    Set the list of AWS resources to get
+    """
+    all_resources = ["S3","EC2","Security Groups","AutoScaling Groups","VPCs","Subnets","IAM Users","RDS Instances","EFS Filesystems", "Lambdas"]
+
+    import inquirer
+    questions = [inquirer.Checkbox('resources',message="Select what resources you'd like to gather (blank for all)", choices=all_resources),]
+    answers = inquirer.prompt(questions)
+
+    if len(answers['resources']) == 0:
+        return all_resources
+    return answers['resources']
+
 def s3_buckets_list(session):
     """
     return list of S3 buckets.
@@ -544,9 +558,11 @@ def init():
     Initialize logic.
     """
     # Set global variables
-    global profiles, sessions, s3_buckets, asg, ec2_instances, workbook_file
+    global profiles, sessions, s3_buckets, asg, ec2_instances, workbook_file, resources
     # Set the list of profiles to use.
     profiles = set_profile_list()['profiles']
+    # Set the AWS resources to get.
+    resources = set_resource_list()
     # get a file to write data to
     workbook_file = input("Enter a file name to write data to ('aws_inventory.xlsx'): ") or "aws_inventory.xlsx"
     # Create a list of boto3 sessions.
@@ -556,66 +572,76 @@ def main():
     init()
     # Open workbook
     workbook = xlsxwriter.Workbook(workbook_file)
-    # Create a list of S3 buckets.
-    s3_buckets = [s3_buckets_list(session) for session in sessions]
-    s3_buckets_flat = [item for sublist in s3_buckets for item in sublist]
-    s3_buckets_flat.insert(0,["Bucket Name", "Profile", "LocationConstraint"])
-    # Write S3 buckets to spreadsheet.
-    write_worksheet(workbook, "S3 Buckets", s3_buckets_flat)
-    # Create a list of EC2 instances.
-    ec2_instances = [ec2_instances_list(session) for session in sessions]
-    ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
-    ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Instance Stopped Time", "Profile", "Region", "Security Groups", "VPC ID"])
-    # Write EC2 instances to spreadsheet.
-    write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
-    # Create a list of Security Group rules.
-    security_groups = [security_groups_list(session) for session in sessions]
-    security_groups_flat = [item for sublist in security_groups for item in sublist]
-    security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "Endpoint", "Rule Description", "Number of Interfaces"])
-    # Write Security Group rules to spreadsheet.
-    write_worksheet(workbook, "Security Group Rules", security_groups_flat)    
-    # Create a list of AutoScaling groups.
-    asg = [asg_list(session) for session in sessions]
-    asg_flat = [item for sublist in asg for item in sublist]
-    asg_flat.insert(0,["AutoScaling Group", "Profile", "Region", "Desired Capacity"])
-    # Write AutoScaling groups to spreadsheet.
-    write_worksheet(workbook, "AutoScaling Groups", asg_flat)
-    # Create a list of VPCs.
-    vpcs = [vpc_list(session) for session in sessions]
-    vpcs_flat = [item for sublist in vpcs for item in sublist]
-    vpcs_flat.insert(0,["VPC ID", "VPC Name", "Profile", "Region", "CIDR Block", "Is Default", "Number of Interfaces"])
-    # Write VPCs to spreadsheet.
-    write_worksheet(workbook, "VPCs", vpcs_flat)
-    # Create a list of Subnets.
-    subnets = [subnet_list(session) for session in sessions]
-    subnets_flat = [item for sublist in subnets for item in sublist]
-    subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone", "Number of Interfaces"])
-    # Write Subnets to spreadsheet.
-    write_worksheet(workbook, "Subnets", subnets_flat)
-    # Create a list of IAM users.
-    iam_users = [iam_users_list(session) for session in sessions]
-    iam_users_flat = [item for sublist in iam_users for item in sublist]
-    iam_users_flat.insert(0,["User Name", "User ARN", "Profile", "Password Age", "Last Activity", "Create Date", "MFA Enabled", "Active Key Age"])
-    # Write IAM users to spreadsheet.
-    write_worksheet(workbook, "IAM Users", iam_users_flat)
-    # Create a list of RDS instances.
-    rds_instances = [rds_instances_list(session) for session in sessions]
-    rds_instances_flat = [item for sublist in rds_instances for item in sublist]
-    rds_instances_flat.insert(0,["DB Identifier", "DB Endpoint", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
-    # Write RDS instances to spreadsheet.
-    write_worksheet(workbook, "RDS Instances", rds_instances_flat)
-    # Create a list of EFS filesystems.
-    efs_filesystems = [efs_filesystems_list(session) for session in sessions]
-    efs_filesystems_flat = [item for sublist in efs_filesystems for item in sublist]
-    efs_filesystems_flat.insert(0,["File System Name", "File System ID", "Profile", "Region", "Create Date", "Size", "Encrypted", "Backup Enabled"])
-    # Write EFS filesystems to spreadsheet.
-    write_worksheet(workbook, "EFS Filesystems", efs_filesystems_flat)
-    # Create a list of Lambda functions and details about them.
-    lambdas = [lambda_list(session) for session in sessions]
-    lambdas_flat = [item for sublist in lambdas for item in sublist]
-    lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
-    # Write lambdas to spreadsheet.
-    write_worksheet(workbook, "Lambda Functions", lambdas_flat)
+    if "S3" in resources:
+        # Create a list of S3 buckets.
+        s3_buckets = [s3_buckets_list(session) for session in sessions]
+        s3_buckets_flat = [item for sublist in s3_buckets for item in sublist]
+        s3_buckets_flat.insert(0,["Bucket Name", "Profile", "LocationConstraint"])
+        # Write S3 buckets to spreadsheet.
+        write_worksheet(workbook, "S3 Buckets", s3_buckets_flat)
+    if "EC2" in resources:
+        # Create a list of EC2 instances.
+        ec2_instances = [ec2_instances_list(session) for session in sessions]
+        ec2_instances_flat = [item for sublist in ec2_instances for item in sublist]
+        ec2_instances_flat.insert(0,["Instance ID", "Name", "Instance Type", "Instance State", "Instance Stopped Time", "Profile", "Region", "Security Groups", "VPC ID"])
+        # Write EC2 instances to spreadsheet.
+        write_worksheet(workbook, "EC2 Instances", ec2_instances_flat)
+    if "Security Groups" in resources:
+        # Create a list of Security Group rules.
+        security_groups = [security_groups_list(session) for session in sessions]
+        security_groups_flat = [item for sublist in security_groups for item in sublist]
+        security_groups_flat.insert(0,["Group Name", "Group ID", "VPC ID", "Group Description", "Profile", "Region", "Direction", "Port", "Endpoint", "Rule Description", "Number of Interfaces"])
+        # Write Security Group rules to spreadsheet.
+        write_worksheet(workbook, "Security Group Rules", security_groups_flat)    
+    if "AutoScaling Groups" in resources:
+        # Create a list of AutoScaling groups.
+        asg = [asg_list(session) for session in sessions]
+        asg_flat = [item for sublist in asg for item in sublist]
+        asg_flat.insert(0,["AutoScaling Group", "Profile", "Region", "Desired Capacity"])
+        # Write AutoScaling groups to spreadsheet.
+        write_worksheet(workbook, "AutoScaling Groups", asg_flat)
+    if "VPCs" in resources:
+        # Create a list of VPCs.
+        vpcs = [vpc_list(session) for session in sessions]
+        vpcs_flat = [item for sublist in vpcs for item in sublist]
+        vpcs_flat.insert(0,["VPC ID", "VPC Name", "Profile", "Region", "CIDR Block", "Is Default", "Number of Interfaces"])
+        # Write VPCs to spreadsheet.
+        write_worksheet(workbook, "VPCs", vpcs_flat)
+    if "Subnets" in resources:
+        # Create a list of Subnets.
+        subnets = [subnet_list(session) for session in sessions]
+        subnets_flat = [item for sublist in subnets for item in sublist]
+        subnets_flat.insert(0,["Subnet ID", "Subnet Name", "Profile", "Region", "VPC ID", "CIDR Block", "Availability Zone", "Number of Interfaces"])
+        # Write Subnets to spreadsheet.
+        write_worksheet(workbook, "Subnets", subnets_flat)
+    if "IAM Users" in resources:
+        # Create a list of IAM users.
+        iam_users = [iam_users_list(session) for session in sessions]
+        iam_users_flat = [item for sublist in iam_users for item in sublist]
+        iam_users_flat.insert(0,["User Name", "User ARN", "Profile", "Password Age", "Last Activity", "Create Date", "MFA Enabled", "Active Key Age"])
+        # Write IAM users to spreadsheet.
+        write_worksheet(workbook, "IAM Users", iam_users_flat)
+    if "RDS Instances" in resources:
+        # Create a list of RDS instances.
+        rds_instances = [rds_instances_list(session) for session in sessions]
+        rds_instances_flat = [item for sublist in rds_instances for item in sublist]
+        rds_instances_flat.insert(0,["DB Identifier", "DB Endpoint", "Availability Zone", "Profile", "Engine", "Size", "Create Date"])
+        # Write RDS instances to spreadsheet.
+        write_worksheet(workbook, "RDS Instances", rds_instances_flat)
+    if "EFS Filesystems" in resources:
+        # Create a list of EFS filesystems.
+        efs_filesystems = [efs_filesystems_list(session) for session in sessions]
+        efs_filesystems_flat = [item for sublist in efs_filesystems for item in sublist]
+        efs_filesystems_flat.insert(0,["File System Name", "File System ID", "Profile", "Region", "Create Date", "Size", "Encrypted", "Backup Enabled"])
+        # Write EFS filesystems to spreadsheet.
+        write_worksheet(workbook, "EFS Filesystems", efs_filesystems_flat)
+    if "Lambdas" in resources:
+        # Create a list of Lambda functions and details about them.
+        lambdas = [lambda_list(session) for session in sessions]
+        lambdas_flat = [item for sublist in lambdas for item in sublist]
+        lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
+        # Write lambdas to spreadsheet.
+        write_worksheet(workbook, "Lambda Functions", lambdas_flat)
     
     workbook.close()
 
