@@ -523,7 +523,7 @@ def main():
         # Write Security Group rules to spreadsheet.
         write_worksheet(workbook, "Security Group Rules", security_groups_flat)   
     if "AutoScaling Groups" in resources:
-    # Create a list of AutoScaling groups.
+        # Create a list of AutoScaling groups.
         asg = [asg_list(session) for session in sessions]
         asg_flat = [item for sublist in asg for item in sublist]
         asg_flat.insert(0,["AutoScaling Group", "Profile", "Region", "Desired Capacity"])
