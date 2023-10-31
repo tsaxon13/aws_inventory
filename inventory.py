@@ -213,7 +213,18 @@ def lambda_list(session):
                         last = "never"
                         invoked = "none"
 
-            lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, lambdaFunction['Runtime'], str(last), str(invoked) ])
+            if lambdaFunction['PackageType'] == 'Zip':
+                lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, lambdaFunction['Runtime'], str(last), str(invoked) ])
+            else:
+                firstRun = True
+                archs = ''
+                for i in lambdaFunction['Architectures']:
+                    if firstRun != True:
+                        archs += '/'
+                    archs += i
+                    firstRun = False
+                lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, archs, str(last), str(invoked) ])
+
     return lambdas
 
 def ec2_instances_list(session):
@@ -650,7 +661,7 @@ def main():
         # Create a list of Lambda functions and details about them.
         lambdas = [lambda_list(session) for session in sessions]
         lambdas_flat = [item for sublist in lambdas for item in sublist]
-        lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
+        lambdas_flat.insert(0,["Lambda Function", "Profile", "Region", "Runtime/Arch", "Last invocation (365 Days)", "Number of invocations (365 Days)"])
         # Write lambdas to spreadsheet.
         write_worksheet(workbook, "Lambda Functions", lambdas_flat)
     
