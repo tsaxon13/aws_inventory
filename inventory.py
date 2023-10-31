@@ -216,11 +216,12 @@ def lambda_list(session):
             if lambdaFunction['PackageType'] == 'Zip':
                 lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, lambdaFunction['Runtime'], str(last), str(invoked) ])
             else:
-                count = 0
+                firstRun = True
                 archs = ''
                 for i in lambdaFunction['Architectures']:
-                    if count != 0:
+                    if firstRun == True:
                         archs += '/'
+                        firstRun = False
                     archs += i
                 lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, archs, str(last), str(invoked) ])
 
