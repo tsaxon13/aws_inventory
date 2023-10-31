@@ -219,10 +219,10 @@ def lambda_list(session):
                 firstRun = True
                 archs = ''
                 for i in lambdaFunction['Architectures']:
-                    if firstRun == True:
+                    if firstRun != True:
                         archs += '/'
-                        firstRun = False
                     archs += i
+                    firstRun = False
                 lambdas.append([lambdaFunction['FunctionName'], session.profile_name, region, archs, str(last), str(invoked) ])
 
     return lambdas
