@@ -504,11 +504,11 @@ def rds_instances_list(session):
                 rds_instance_az = rds_instance['AvailabilityZone']
                 rds_instance_create_date = rds_instance['InstanceCreateTime']
                 rds_instance_engine = rds_instance['Engine']
-                rds_instaince_engine_version = rds_instance['EngineVersion']
+                rds_instance_engine_version = rds_instance['EngineVersion']
                 rds_instance_type = rds_instance['DBInstanceClass']
                 rds_endpoint_address = rds_instance['Endpoint']['Address']
                 #rds_instance_size = rds_instance.
-                rds_instances.append([rds_instance_name, rds_endpoint_address, rds_instance_az, session.profile_name, rds_instance_engine, rds_instaince_engine_version, rds_instance_type, str(rds_instance_create_date.replace(tzinfo=None))])
+                rds_instances.append([rds_instance_name, rds_endpoint_address, rds_instance_az, session.profile_name, rds_instance_engine, rds_instance_engine_version, rds_instance_type, str(rds_instance_create_date.replace(tzinfo=None))])
         except Exception as e:
             print("Error getting RDS instances for profile: {}".format(session.profile_name) + ": " + str(e))
             traceback.print_exc()
